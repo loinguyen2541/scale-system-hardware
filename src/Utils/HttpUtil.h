@@ -14,7 +14,8 @@ public:
     WiFiClientSecure client;
     HttpUtil(/* args */);
     ~HttpUtil();
-    void Post();
+    bool Post(String cardId, float weightIn);
+    bool Put(String cardId, float weightOut);
 };
 
 #endif

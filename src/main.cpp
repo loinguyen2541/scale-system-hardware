@@ -2,10 +2,10 @@
 #include <MFRC522.h>
 #include <math.h>
 #include <string.h>
-#include "HX711.h"
 #include "objects/Card.cpp"
 #include "utils/HttpUtil.h"
 #include "utils/WifiUtil.h"
+#include "Utils/ScaleUtil.h"
 
 #define RST_PIN D3
 #define SS_PIN D8
@@ -14,11 +14,6 @@ const int LOADCELL_DOUT_PIN = D1;
 const int LOADCELL_SCK_PIN = D2;
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
-HX711 scale;
-
-float x = -9.77; //dây đen, out
-//float x = -9.54; //dây đỏ, có gió
-//float x = -10.07; //dây đỏ, ko gió
 
 String before_value = "begin";
 String result = "0.0";
@@ -33,6 +28,8 @@ HttpUtil httpUtil;
 
 WifiUtil wifi;
 
+ScaleUtil scale;
+
 void setup()
 {
   Serial.begin(115200);
@@ -43,14 +40,12 @@ void setup()
   mfrc522.PCD_Init();
   //init pin
   pinMode(BUZZER_PIN, OUTPUT);
-  //init scale
-  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-  scale.set_scale(x);
-  scale.tare();
 
   // *********************************
   // Http Client
   // *********************************
+
+  //httpUtil.Put("asdsa", 100);
 }
 
 void scanCard()
@@ -126,7 +121,7 @@ void scanCard()
 
 void loop()
 {
-  //scanCard();
-
-  delay(1000000);
+  float unit = scale.GetScale();
+  Serial.println(unit);
+  delay(100);
 }
