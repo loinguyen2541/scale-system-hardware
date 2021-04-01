@@ -1,3 +1,6 @@
+#ifndef SCALE_H
+#define SCALE_H
+
 #include <Arduino.h>
 #include "HX711.h"
 
@@ -16,3 +19,5 @@ public:
     ~ScaleUtil();
     float GetScale();
 };
+
+#endif

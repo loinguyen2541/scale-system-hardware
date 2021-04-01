@@ -7,18 +7,18 @@
 #include "utils/WifiUtil.h"
 #include "Utils/ScaleUtil.h"
 
-#define RST_PIN D3
-#define SS_PIN D8
-#define BUZZER_PIN D0
+#include "SPI.h"
+#include "PN532/PN532_SPI/PN532_SPI.h"
+#include "PN532/PN532/snep.h"
+#include "NdefMessage.h"
+
+#define BUZZER_PIN D8
 const int LOADCELL_DOUT_PIN = D1;
 const int LOADCELL_SCK_PIN = D2;
 
-MFRC522 mfrc522(SS_PIN, RST_PIN);
-
-String before_value = "begin";
-String result = "0.0";
-float weight = 0.0;
-int statusCode = 0;
+PN532_SPI pn532spi(SPI, D0);
+SNEP nfc(pn532spi);
+PN532 nfc_p2p(pn532spi);
 
 String responeContent = "";
 
@@ -30,14 +30,17 @@ WifiUtil wifi;
 
 ScaleUtil scale;
 
+uint8_t ndefBuffer[128];
+
 void setup()
 {
   Serial.begin(115200);
   SPI.begin();
   //init wifi
+  nfc_p2p.begin();
+
   wifi.Connect();
   //init rfc
-  mfrc522.PCD_Init();
   //init pin
   pinMode(BUZZER_PIN, OUTPUT);
 
@@ -48,80 +51,106 @@ void setup()
   //httpUtil.Put("asdsa", 100);
 }
 
-void scanCard()
+String getCardId()
 {
-  String nfc_value = "";
-  String weightOfVehicle;
-
-  if (mfrc522.PICC_IsNewCardPresent())
+  String cardId;
+  int msgSize = nfc.read(ndefBuffer, sizeof(ndefBuffer), 500);
+  if (msgSize > 0)
   {
-    if (mfrc522.PICC_ReadCardSerial())
+    NdefMessage msg = NdefMessage(ndefBuffer, msgSize);
+    NdefRecord record = msg.getRecord(0);
+
+    int payloadLength = record.getPayloadLength();
+    byte payload[payloadLength];
+    record.getPayload(payload);
+    int startChar = 0;
+    if (record.getTnf() == TNF_WELL_KNOWN && record.getType() == "T")
     {
-      //noti by pin
-      digitalWrite(BUZZER_PIN, HIGH);
-      delay(100);
-      //get card id
-      for (byte i = 0; i < mfrc522.uid.size; ++i)
+      startChar = payload[0] + 1;
+    }
+    else if (record.getTnf() == TNF_WELL_KNOWN && record.getType() == "U")
+    {
+      startChar = 1;
+    }
+
+    String payloadAsString = "";
+    for (int c = startChar; c < payloadLength; c++)
+    {
+      payloadAsString += (char)payload[c];
+    }
+    cardId = payloadAsString;
+    Serial.println(payloadAsString);
+  }
+  else
+  {
+    boolean success;
+    uint8_t uid[] = {0, 0, 0, 0, 0, 0, 0}; // Buffer to store the returned UID
+    uint8_t uidLength;                     // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
+    success = nfc_p2p.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength);
+
+    if (success)
+    {
+      Serial.println("Found a card!");
+      Serial.print("UID Length: ");
+      Serial.print(uidLength, DEC);
+      Serial.println(" bytes");
+      Serial.print("UID Value: ");
+      for (uint8_t i = 0; i < uidLength; i++)
       {
-        nfc_value += mfrc522.uid.uidByte[i];
+        cardId = cardId + uid[i];
       }
-      Serial.println(nfc_value);
-      //check duplicate card
-      if (before_value != nfc_value)
-      {
-        //check card existed
-        //get api check card
-        Serial.println("Card: " + nfc_value);
-        if (card.identityCardId == 0 || card.partnerId == 0)
-        {
-          //the khong hop le
-          Serial.println("Sai the");
-          digitalWrite(BUZZER_PIN, HIGH);
-          delay(50);
-          digitalWrite(BUZZER_PIN, LOW);
-          delay(50);
-          digitalWrite(BUZZER_PIN, HIGH);
-          delay(50);
-          digitalWrite(BUZZER_PIN, HIGH);
-          delay(50);
-          digitalWrite(BUZZER_PIN, LOW);
-          delay(50);
-          digitalWrite(BUZZER_PIN, HIGH);
-          delay(50);
-        }
-        else
-        {
-          Serial.println("OKkkkkkkkkkkkkkkkkkkkkkkkkkkkkk: ");
-          //getWeight();
-          Serial.println("Result: " + result);
-          //post api create transactionId
-          weightOfVehicle = String(weight);
-          //postAPI("http://192.168.137.36/api/transactions/automatic?weightIn=" + weightOfVehicle + "&cardId=" + card.identityCardId);
-          //UpdateTransaction("http://192.168.43.36/api/transactions/automatic?cardId="+card.identityCardId+"&weightOut="+weightOfVehicle);
-          card.identityCardId.trim();
-          //putAPI("/api/transactions/automatic?weightOut=150&cardId=214418643");
-        }
-      }
-      else
-      {
-        //trung the
-        Serial.println("Trung the");
-        digitalWrite(BUZZER_PIN, HIGH);
-        delay(20);
-        digitalWrite(BUZZER_PIN, LOW);
-        delay(20);
-        digitalWrite(BUZZER_PIN, HIGH);
-        delay(20);
-      }
-      before_value = nfc_value;
+      Serial.println("cardID   " + cardId);
+      // Wait 1 second before continuing
+      return cardId;
     }
   }
-  mfrc522.PICC_HaltA();
+}
+
+void warnBuzz()
+{
+  for (size_t i = 0; i < 10; i++)
+  {
+
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(100);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+  }
+}
+
+void wrongCardBuzz()
+{
+  for (size_t i = 0; i < 2; i++)
+  {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(100);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+  }
 }
 
 void loop()
 {
   float unit = scale.GetScale();
-  Serial.println(unit);
-  delay(100);
+  String cardId = getCardId();
+  if (cardId.length() > 5)
+  {
+    digitalWrite(BUZZER_PIN, HIGH);
+    bool result = httpUtil.Post(cardId, unit);
+    if (!result)
+    {
+      digitalWrite(BUZZER_PIN, LOW);
+      delay(500);
+      wrongCardBuzz();
+    }
+    else
+    {
+      digitalWrite(BUZZER_PIN, LOW);
+      delay(500);
+      digitalWrite(BUZZER_PIN, HIGH);
+      delay(100);
+      digitalWrite(BUZZER_PIN, LOW);
+      delay(100);
+    }
+  }
 }

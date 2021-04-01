@@ -8,8 +8,8 @@ class WifiUtil
 private:
     /* data */
 public:
-    const char *ssid = "FPTU_Student";
-    const char *password = "12345678";
+    const char *ssid = "scale_system";
+    const char *password = "12356789";
     WifiUtil();
     ~WifiUtil();
     void Connect();

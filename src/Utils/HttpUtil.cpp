@@ -20,7 +20,7 @@ bool HttpUtil::Post(String cardId, float weightIn)
         return false;
     }
 
-    String url = "/api/transactions/automatic?weightIn=170&cardId=214418643a";
+    String url = "/api/transactions/automatic?weightIn=" + String(weightIn) + "&cardId=" + cardId;
 
     Serial.print("requesting URL: ");
     Serial.println(url);
@@ -45,24 +45,22 @@ bool HttpUtil::Post(String cardId, float weightIn)
     Serial.println("reply was:");
     Serial.println("==========");
     String line;
-    if (client.status() == 201)
+
+    while (client.available())
     {
-        while (client.available())
-        {
-            line = client.readStringUntil('\n'); //Read Line by Line
-            Serial.println(line);                //Print response
-        }
-        result = true;
+        line = client.readString();
+    }
+
+    if (line.indexOf("Card is not exist") > -1)
+    {
+
+        Serial.println("error");
+        return false;
     }
     else
     {
-        Serial.println("Post Error!");
-        while (client.available())
-        {
-            line = client.readStringUntil('\n'); //Read Line by Line
-            Serial.println(line);                //Print response
-        }
-        result = false;
+        Serial.println(line);
+        result = true;
     }
     Serial.println("==========");
     Serial.println("closing connection");
@@ -78,7 +76,7 @@ bool HttpUtil::Put(String cardId, float weightOut)
         return false;
     }
 
-    String url = "/api/transactions/automatic/214418643?weightOut=100";
+    String url = "/api/transactions/automatic/" + cardId + "?weightOut=" + weightOut;
 
     Serial.print("requesting URL: ");
     Serial.println(url);
@@ -103,24 +101,22 @@ bool HttpUtil::Put(String cardId, float weightOut)
     Serial.println("reply was:");
     Serial.println("==========");
     String line;
-    if (client.status() == 201)
+
+    while (client.available())
     {
-        while (client.available())
-        {
-            line = client.readStringUntil('\n'); //Read Line by Line
-            Serial.println(line);                //Print response
-        }
-        result = true;
+        line = client.readString();
+    }
+
+    if (line.indexOf("Card is not exist") > -1)
+    {
+
+        Serial.println("error");
+        return false;
     }
     else
     {
-        Serial.println("Post Error!");
-        while (client.available())
-        {
-            line = client.readStringUntil('\n'); //Read Line by Line
-            Serial.println(line);                //Print response
-        }
-        result = false;
+        Serial.println(line);
+        result = true;
     }
     Serial.println("==========");
     Serial.println("closing connection");
