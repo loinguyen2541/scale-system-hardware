@@ -2,11 +2,12 @@
 #include <MFRC522.h>
 #include <math.h>
 #include <string.h>
+#include <ArduinoJson.h>
 #include "objects/Card.cpp"
 #include "utils/HttpUtil.h"
 #include "utils/WifiUtil.h"
 #include "Utils/ScaleUtil.h"
-
+#include <EEPROM.h>
 #include "SPI.h"
 #include "PN532/PN532_SPI/PN532_SPI.h"
 #include "PN532/PN532/snep.h"
@@ -32,23 +33,34 @@ ScaleUtil scale;
 
 uint8_t ndefBuffer[128];
 
+const String GATE_1 = "Gate1";
+const String GATE_2 = "Gate1";
+
 void setup()
 {
+  EEPROM.begin(512);
+  // write a 0 to all 512 bytes of the EEPROM
+  for (int i = 0; i < 512; i++)
+  {
+    EEPROM.write(i, 0);
+  }
+
+  // turn the LED on when we're done
+  pinMode(13, OUTPUT);
+  digitalWrite(13, HIGH);
+  EEPROM.end();
+  // turn the LED on when we're done
+  pinMode(13, OUTPUT);
+  digitalWrite(13, HIGH);
+  EEPROM.end();
   Serial.begin(115200);
   SPI.begin();
   //init wifi
   nfc_p2p.begin();
 
-  wifi.Connect();
-  //init rfc
+  //wifi.Connect();
   //init pin
   pinMode(BUZZER_PIN, OUTPUT);
-
-  // *********************************
-  // Http Client
-  // *********************************
-
-  //httpUtil.Put("asdsa", 100);
 }
 
 String getCardId()
@@ -129,28 +141,62 @@ void wrongCardBuzz()
   }
 }
 
+String generateTransactionJson(String device, String identifify, String weight)
+{
+  StaticJsonDocument<500> doc;
+  doc["device"] = device;
+  doc["gate"] = GATE_1;
+  doc["indentify"] = identifify;
+  doc["weight"] = weight + "";
+  String jsonTran = "";
+  serializeJson(doc, jsonTran);
+  return jsonTran;
+}
+
+void readResponse()
+{
+  if (Serial.available())
+  {
+    String value = Serial.readStringUntil('\n');
+    if (value.startsWith("@response"))
+    {
+      if (value.indexOf("Success") > 0)
+      {
+        digitalWrite(BUZZER_PIN, LOW);
+        delay(500);
+        digitalWrite(BUZZER_PIN, HIGH);
+        delay(100);
+        digitalWrite(BUZZER_PIN, LOW);
+        delay(100);
+      }
+      else if (value.indexOf("Fail") > 0)
+      {
+        wrongCardBuzz();
+      }
+    }
+  }
+}
+
 void loop()
 {
+  readResponse();
   float unit = scale.GetScale();
-  String cardId = getCardId();
-  if (cardId.length() > 5)
+  //Serial.println(String(unit));
+  if (unit > 300)
   {
-    digitalWrite(BUZZER_PIN, HIGH);
-    bool result = httpUtil.Post(cardId, unit);
-    if (!result)
+    warnBuzz();
+  }
+  else
+  {
+
+    String cardId = getCardId();
+    if (cardId.length() > 5)
     {
-      digitalWrite(BUZZER_PIN, LOW);
-      delay(500);
-      wrongCardBuzz();
-    }
-    else
-    {
-      digitalWrite(BUZZER_PIN, LOW);
-      delay(500);
-      digitalWrite(BUZZER_PIN, HIGH);
-      delay(100);
-      digitalWrite(BUZZER_PIN, LOW);
-      delay(100);
+      //digitalWrite(BUZZER_PIN, HIGH);
+      String weight = String(unit);
+      String body = generateTransactionJson("Card", cardId, weight);
+      String message = "@request|" + body;
+      Serial.println(message);
     }
   }
 }

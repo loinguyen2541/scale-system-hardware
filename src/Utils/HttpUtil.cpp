@@ -20,7 +20,7 @@ bool HttpUtil::Post(String cardId, float weightIn)
         return false;
     }
 
-    String url = "/api/transactions/automatic?weightIn=" + String(weightIn) + "&cardId=" + cardId;
+    String url = "/api/transactions?weightIn=" + String(weightIn) + "&cardId=" + cardId;
 
     Serial.print("requesting URL: ");
     Serial.println(url);
@@ -76,7 +76,7 @@ bool HttpUtil::Put(String cardId, float weightOut)
         return false;
     }
 
-    String url = "/api/transactions/automatic/" + cardId + "?weightOut=" + weightOut;
+    String url = "/api/transactions?cardId=" + cardId + "&weightOut=" + weightOut;
 
     Serial.print("requesting URL: ");
     Serial.println(url);
@@ -107,10 +107,12 @@ bool HttpUtil::Put(String cardId, float weightOut)
         line = client.readString();
     }
 
-    if (line.indexOf("Card is not exist") > -1)
+    if (line.indexOf("Bad Request") > -1)
     {
 
-        Serial.println("error");
+        Serial.println("error");  
+        Serial.println(line);
+        result = true;
         return false;
     }
     else
